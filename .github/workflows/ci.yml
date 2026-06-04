@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: ["codex/**", "feature/**", "fix/**"]
+  pull_request:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Unit tests
+        run: python -m pytest
+
+      - name: CLI smoke test
+        run: python -m novel_creator.cli --help
+
+      - name: Init vault smoke test
+        run: novelctl init-vault
+
+      - name: Build package
+        run: python -m build
+
+      - name: Verify vault/References not committed
+        run: |
+          if git ls-files --error-unmatch vault/References/ 2>/dev/null; then
+            echo "ERROR: vault/References/ files found in git tracking"
+            exit 1
+          else
+            echo "OK: vault/References/ not tracked by git"
+          fi

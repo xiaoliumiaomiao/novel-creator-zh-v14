@@ -60,14 +60,26 @@ def _cmd_score_chapter(file: str) -> int:
     return score_chapter(Path(file))
 
 
-def _cmd_deai(file: str, mode: str = "detail-light") -> int:
+def _cmd_deai(args: list[str]) -> int:
     """对文件进行去 AI 味处理.
 
-    mode: expression-only | detail-light | dramatic-boost
+    用法: novelctl deai <file> [--mode expression-only|detail-light|dramatic-boost]
     """
     from novel_creator.deai import process_deai
 
-    return process_deai(Path(file), mode)
+    if not args:
+        return _fail("缺少文件参数")
+
+    file_path = Path(args[0])
+    mode = "detail-light"
+
+    # 解析 --mode 标志
+    for i, arg in enumerate(args):
+        if arg == "--mode" and i + 1 < len(args):
+            mode = args[i + 1]
+            break
+
+    return process_deai(file_path, mode)
 
 
 def _cmd_lint() -> int:
@@ -219,10 +231,7 @@ def main() -> int:
         "score-chapter": lambda: (
             _cmd_score_chapter(cmd_args[0]) if cmd_args else _fail("缺少文件参数")
         ),
-        "deai": lambda: _cmd_deai(
-            cmd_args[0] if cmd_args else _fail("缺少文件参数"),
-            cmd_args[1] if len(cmd_args) > 1 else "detail-light",
-        ),
+        "deai": lambda: _cmd_deai(cmd_args),
         "lint": lambda: _cmd_lint(),
         "dashboard": lambda: _cmd_dashboard(),
         "publish-check": lambda: _cmd_publish_check(),

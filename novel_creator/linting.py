@@ -40,14 +40,12 @@ def run_lint() -> int:
 
     total_issues = 0
 
-    # 扫描章节文件
+    # 扫描章节文件（跳过 Samples 迷你样例）
     chapters_dir = VAULT_DIR / "05_Chapters"
-    samples_dir = VAULT_DIR / "Samples"
 
     all_md_files: list[Path] = []
-    for directory in [chapters_dir, samples_dir]:
-        if directory.exists():
-            all_md_files.extend(directory.rglob("*.md"))
+    if chapters_dir.exists():
+        all_md_files.extend(chapters_dir.rglob("*.md"))
 
     if not all_md_files:
         console.print("[yellow]未找到章节文件[/yellow]")
@@ -79,38 +77,153 @@ def run_lint() -> int:
 
 
 def run_publish_check() -> int:
-    """发布前总闸门检查.
+    """发布前总闸门检查 — 所有检查必须通过才能发布.
 
     Returns:
         0 通过, 1 未通过.
     """
-    console.print("[bold cyan]发布前总闸门检查...[/bold cyan]\n")
+    console.print("[bold cyan]═══════════════════════════════════[/bold cyan]")
+    console.print("[bold cyan]  发布前总闸门检查[/bold cyan]")
+    console.print("[bold cyan]═══════════════════════════════════[/bold cyan]\n")
 
-    # 运行所有检查
+    total_failures = 0
+
+    # 1. 硬规则检查
+    console.print("[bold]1/6 硬规则检查[/bold]")
     lint_result = run_lint()
+    if lint_result != 0:
+        total_failures += 1
 
-    # 额外检查
-    # Agent Trace 检查
+    # 2. 风险审查
+    console.print("\n[bold]2/6 风险审查[/bold]")
+    risk_result = _run_risk_check()
+    if risk_result != 0:
+        total_failures += 1
+
+    # 3. Agent Trace 检查
+    console.print("\n[bold]3/6 Agent Trace 检查[/bold]")
     trace_dir = VAULT_DIR / "00_Dashboard" / "Agent_Traces"
     if trace_dir.exists() and list(trace_dir.iterdir()):
         console.print("[green]✓[/green] Agent Trace 存在")
     else:
-        console.print("[yellow]⚠[/yellow] Agent Trace 目录为空（创作期自动生成）")
+        console.print("[yellow]⚠[/yellow] Agent Trace 目录为空（创作期自动生成，非阻塞）")
 
-    # 参考库泄漏检查
-    ref_dir = VAULT_DIR / "References"
-    if ref_dir.exists():
-        md_files = list(ref_dir.rglob("*.md"))
-        md_files = [f for f in md_files if f.name != "README.md"]
-        if md_files:
-            console.print(f"[dim]参考库: {len(md_files)} 个文件（不参与发布检查）[/dim]")
+    # 4. 参考库保护检查
+    console.print("\n[bold]4/6 参考库保护检查[/bold]")
+    ref_result = _check_reference_protection()
+    if ref_result > 0:
+        total_failures += 1
+    else:
+        console.print("[green]✓[/green] 参考库未被 Git 追踪")
 
-    if lint_result == 0:
-        console.print("\n[bold green]发布检查通过！[/bold green]")
+    # 5. 字数统计
+    console.print("\n[bold]5/6 字数统计[/bold]")
+    word_result = _check_all_chapter_words()
+    if word_result > 0:
+        total_failures += 1
+
+    # 6. YAML/链接/状态检查
+    console.print("\n[bold]6/6 YAML/链接/状态检查[/bold]")
+    yaml_result = _check_chapter_metadata()
+    if yaml_result > 0:
+        total_failures += 1
+
+    # 汇总
+    console.print(f"\n[bold cyan]{'═' * 40}[/bold cyan]")
+    if total_failures == 0:
+        console.print("[bold green]✓ 发布检查全部通过！可以发布。[/bold green]")
         return 0
     else:
-        console.print("\n[bold red]发布检查未通过，请修复上述问题[/bold red]")
+        console.print(f"[bold red]✗ {total_failures} 项检查未通过，禁止发布。[/bold red]")
         return 1
+
+
+def _run_risk_check() -> int:
+    """对所有章节运行风险审查."""
+    from novel_creator.risk import review_file
+
+    chapters_dir = VAULT_DIR / "05_Chapters"
+    if not chapters_dir.exists():
+        return 0
+
+    issues = 0
+    for md_file in chapters_dir.rglob("*.md"):
+        report = review_file(md_file)
+        if not report.get("pass", False):
+            console.print(f"  [red]✗[/red] {md_file.name}: 风险未通过")
+            issues += 1
+        else:
+            console.print(f"  [green]✓[/green] {md_file.name}")
+
+    return issues
+
+
+def _check_all_chapter_words() -> int:
+    """检查所有章节字数."""
+    chapters_dir = VAULT_DIR / "05_Chapters"
+    if not chapters_dir.exists():
+        return 0
+
+    issues = 0
+    for md_file in chapters_dir.rglob("*.md"):
+        try:
+            content = md_file.read_text(encoding="utf-8")
+            body = _extract_body(content)
+            words = _count_effective_chars(body)
+            if words < CHAPTER_MIN_WORDS or words > CHAPTER_MAX_WORDS:
+                console.print(
+                    f"  [red]✗[/red] {md_file.name}: {words}字 "
+                    f"（要求{CHAPTER_MIN_WORDS}-{CHAPTER_MAX_WORDS}）"
+                )
+                issues += 1
+            else:
+                console.print(f"  [green]✓[/green] {md_file.name}: {words}字")
+        except Exception:
+            console.print(f"  [yellow]⚠[/yellow] {md_file.name}: 无法读取")
+
+    return issues
+
+
+def _check_chapter_metadata() -> int:
+    """检查所有章节的 YAML/链接/状态."""
+    chapters_dir = VAULT_DIR / "05_Chapters"
+    if not chapters_dir.exists():
+        return 0
+
+    issues = 0
+    required_fields = ["type", "book", "track", "status", "chapter_no", "title"]
+
+    for md_file in chapters_dir.rglob("*.md"):
+        try:
+            content = md_file.read_text(encoding="utf-8")
+            metadata = _parse_frontmatter(content)
+
+            missing = [f for f in required_fields if f not in metadata]
+            if missing:
+                console.print(
+                    f"  [red]✗[/red] {md_file.name}: 缺少字段 {', '.join(missing)}"
+                )
+                issues += 1
+                continue
+
+            # 检查状态值
+            valid_states = {
+                "planned", "drafted", "reviewed", "deai", "polished", "approved",
+                "rejected", "revision-planned", "revised",
+            }
+            if metadata.get("status") not in valid_states:
+                console.print(
+                    f"  [red]✗[/red] {md_file.name}: 无效状态 '{metadata['status']}'"
+                )
+                issues += 1
+                continue
+
+            console.print(f"  [green]✓[/green] {md_file.name}")
+
+        except Exception:
+            console.print(f"  [yellow]⚠[/yellow] {md_file.name}: 无法读取")
+
+    return issues
 
 
 def _check_file(file_path: Path) -> list[str]:

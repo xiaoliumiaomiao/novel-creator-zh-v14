@@ -7,7 +7,7 @@ name = "novel-creator-zh"
 version = "14.0.0"
 description = "中文网文工业化创作工具集 — Chinese Web Novel Industrial Creation Toolset"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.10"
 authors = [
     {name = "Novel Creator ZH Team"}

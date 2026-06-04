@@ -216,6 +216,17 @@ def _write_template(path: Path, content: str) -> None:
 def _create_samples() -> None:
     """创建男频/女频迷你样例."""
     samples_dir = VAULT_DIR / "Samples"
+    male_dir = samples_dir / "sample-male"
+    female_dir = samples_dir / "sample-female"
+    male_dir.mkdir(parents=True, exist_ok=True)
+    female_dir.mkdir(parents=True, exist_ok=True)
+
+    male_chapter = male_dir / "第1章 初入局中.md"
+    female_chapter = female_dir / "第1章 重生归来.md"
+    if male_chapter.exists() and female_chapter.exists():
+        console.print("    [green]✓[/green] sample-male/第1章 初入局中.md")
+        console.print("    [green]✓[/green] sample-female/第1章 重生归来.md")
+        return
 
     # 男频迷你样例
     male_dir = samples_dir / "sample-male"

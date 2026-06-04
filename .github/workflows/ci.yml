@@ -39,14 +39,25 @@ jobs:
       - name: Init vault smoke test
         run: novelctl init-vault
 
+      - name: Markdown/YAML lint smoke test
+        run: novelctl lint
+
+      - name: Dashboard smoke test
+        run: novelctl dashboard
+
+      - name: Publish check smoke test
+        run: novelctl publish-check
+
       - name: Build package
         run: python -m build
 
       - name: Verify vault/References not committed
         run: |
-          if git ls-files --error-unmatch vault/References/ 2>/dev/null; then
-            echo "ERROR: vault/References/ files found in git tracking"
+          leaked=$(git ls-files -- vault/References ':!vault/References/README.md')
+          if [ -n "$leaked" ]; then
+            echo "ERROR: vault/References source files found in git tracking"
+            echo "$leaked"
             exit 1
           else
-            echo "OK: vault/References/ not tracked by git"
+            echo "OK: only vault/References/README.md may be tracked"
           fi

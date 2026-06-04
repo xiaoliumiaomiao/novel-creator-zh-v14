@@ -11,6 +11,9 @@ CHECKS = [
     ("Ruff lint", ["ruff", "check", "."]),
     ("Unit tests", [sys.executable, "-m", "pytest", "--tb=short"]),
     ("CLI smoke", [sys.executable, "-m", "novel_creator.cli", "--help"]),
+    ("Markdown/YAML lint", [sys.executable, "-m", "novel_creator.cli", "lint"]),
+    ("Dashboard", [sys.executable, "-m", "novel_creator.cli", "dashboard"]),
+    ("Publish check", [sys.executable, "-m", "novel_creator.cli", "publish-check"]),
     ("Package build", [sys.executable, "-m", "build"]),
 ]
 

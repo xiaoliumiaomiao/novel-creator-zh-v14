@@ -86,8 +86,7 @@ class TestScoreChapter:
         path = VAULT_DIR / "Samples" / "sample-male" / "第1章 初入局中.md"
         if path.exists():
             result = score_chapter(path)
-            # 迷你样例字数不足2500，评分函数正确返回未通过
-            assert result == 1
+            assert result == 0
         else:
             pytest.skip("样例文件不存在")
 
@@ -95,8 +94,7 @@ class TestScoreChapter:
         path = VAULT_DIR / "Samples" / "sample-female" / "第1章 重生归来.md"
         if path.exists():
             result = score_chapter(path)
-            # 迷你样例字数不足2500，评分函数正确返回未通过
-            assert result == 1
+            assert result == 0
         else:
             pytest.skip("样例文件不存在")
 

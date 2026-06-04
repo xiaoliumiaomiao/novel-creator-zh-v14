@@ -158,6 +158,8 @@ def _check_empty_lines(text: str) -> list[int]:
     issues = []
     lines = text.split("\n")
     for i, line in enumerate(lines):
+        if i == len(lines) - 1 and line == "":
+            continue
         if line == "" and i > 0:  # 连续空行
             issues.append(i)
     return issues

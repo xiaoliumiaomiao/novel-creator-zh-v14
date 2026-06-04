@@ -223,9 +223,22 @@ def main() -> int:
     command = args[0]
     cmd_args = args[1:]
 
+    def _import_ima_args() -> int:
+        source = None
+        if cmd_args:
+            if cmd_args[0] == "--source":
+                if len(cmd_args) < 2:
+                    return _fail("缺少 --source 路径参数")
+                source = cmd_args[1]
+            elif cmd_args[0].startswith("--source="):
+                source = cmd_args[0].split("=", 1)[1]
+            else:
+                source = cmd_args[0]
+        return _cmd_import_ima(source)
+
     commands: dict[str, callable] = {
         "init-vault": lambda: _cmd_init_vault(),
-        "import-ima": lambda: _cmd_import_ima(cmd_args[0] if cmd_args else None),
+        "import-ima": _import_ima_args,
         "index": lambda: _cmd_index(),
         "extract-patterns": lambda: _cmd_extract_patterns(),
         "score-chapter": lambda: (

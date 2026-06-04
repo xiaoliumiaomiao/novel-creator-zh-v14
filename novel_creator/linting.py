@@ -29,6 +29,35 @@ BANNED_PATTERNS = [
     (re.compile(r'众所周知'), "模板化强调：众所周知"),
 ]
 
+DEAI_VARIANT_SUFFIXES = (".original.md", ".natural.md", ".web-serial.md")
+
+
+def _discover_chapter_files(include_samples: bool = True) -> list[Path]:
+    """发现需要硬规则检查的章节文件."""
+    files: list[Path] = []
+
+    chapters_dir = VAULT_DIR / "05_Chapters"
+    if chapters_dir.exists():
+        files.extend(chapters_dir.rglob("*.md"))
+
+    if include_samples:
+        samples_dir = VAULT_DIR / "Samples"
+        if samples_dir.exists():
+            files.extend(samples_dir.rglob("*.md"))
+
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for file_path in files:
+        if file_path.name.endswith(DEAI_VARIANT_SUFFIXES):
+            continue
+        if not re.match(r'第\d+章 .+\.md$', file_path.name):
+            continue
+        resolved = file_path.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            unique.append(file_path)
+    return unique
+
 
 def run_lint() -> int:
     """运行完整硬规则检查，扫描所有 vault 章节.
@@ -40,17 +69,11 @@ def run_lint() -> int:
 
     total_issues = 0
 
-    # 扫描章节文件（跳过 Samples 迷你样例）
-    chapters_dir = VAULT_DIR / "05_Chapters"
-
-    all_md_files: list[Path] = []
-    if chapters_dir.exists():
-        all_md_files.extend(chapters_dir.rglob("*.md"))
+    all_md_files = _discover_chapter_files(include_samples=True)
 
     if not all_md_files:
         console.print("[yellow]未找到章节文件[/yellow]")
-        # 也检查样例
-        return 0
+        return 1
 
     for md_file in all_md_files:
         issues = _check_file(md_file)
@@ -103,10 +126,14 @@ def run_publish_check() -> int:
     # 3. Agent Trace 检查
     console.print("\n[bold]3/6 Agent Trace 检查[/bold]")
     trace_dir = VAULT_DIR / "00_Dashboard" / "Agent_Traces"
-    if trace_dir.exists() and list(trace_dir.iterdir()):
-        console.print("[green]✓[/green] Agent Trace 存在")
+    trace_files = list(trace_dir.glob("*.md")) if trace_dir.exists() else []
+    chapter_files = _discover_chapter_files(include_samples=True)
+    if trace_files:
+        console.print(f"[green]✓[/green] Agent Trace 存在（{len(trace_files)}份）")
     else:
-        console.print("[yellow]⚠[/yellow] Agent Trace 目录为空（创作期自动生成，非阻塞）")
+        console.print("[red]✗[/red] Agent Trace 目录为空")
+        if chapter_files:
+            total_failures += 1
 
     # 4. 参考库保护检查
     console.print("\n[bold]4/6 参考库保护检查[/bold]")
@@ -142,12 +169,13 @@ def _run_risk_check() -> int:
     """对所有章节运行风险审查."""
     from novel_creator.risk import review_file
 
-    chapters_dir = VAULT_DIR / "05_Chapters"
-    if not chapters_dir.exists():
-        return 0
-
     issues = 0
-    for md_file in chapters_dir.rglob("*.md"):
+    md_files = _discover_chapter_files(include_samples=True)
+    if not md_files:
+        console.print("  [red]✗[/red] 未找到可审查章节")
+        return 1
+
+    for md_file in md_files:
         report = review_file(md_file)
         if not report.get("pass", False):
             console.print(f"  [red]✗[/red] {md_file.name}: 风险未通过")
@@ -160,12 +188,13 @@ def _run_risk_check() -> int:
 
 def _check_all_chapter_words() -> int:
     """检查所有章节字数."""
-    chapters_dir = VAULT_DIR / "05_Chapters"
-    if not chapters_dir.exists():
-        return 0
-
     issues = 0
-    for md_file in chapters_dir.rglob("*.md"):
+    md_files = _discover_chapter_files(include_samples=True)
+    if not md_files:
+        console.print("  [red]✗[/red] 未找到章节文件")
+        return 1
+
+    for md_file in md_files:
         try:
             content = md_file.read_text(encoding="utf-8")
             body = _extract_body(content)
@@ -186,14 +215,15 @@ def _check_all_chapter_words() -> int:
 
 def _check_chapter_metadata() -> int:
     """检查所有章节的 YAML/链接/状态."""
-    chapters_dir = VAULT_DIR / "05_Chapters"
-    if not chapters_dir.exists():
-        return 0
-
     issues = 0
     required_fields = ["type", "book", "track", "status", "chapter_no", "title"]
 
-    for md_file in chapters_dir.rglob("*.md"):
+    md_files = _discover_chapter_files(include_samples=True)
+    if not md_files:
+        console.print("  [red]✗[/red] 未找到章节文件")
+        return 1
+
+    for md_file in md_files:
         try:
             content = md_file.read_text(encoding="utf-8")
             metadata = _parse_frontmatter(content)
@@ -281,8 +311,10 @@ def _check_file(file_path: Path) -> list[str]:
     if is_chapter_body:
         body_lines = body.split("\n")
         for i, line in enumerate(body_lines):
-            if line.strip() == "" and i > 0 and body_lines[i - 1].strip() == "":
-                issues.append(f"发现连续空行（第{i + 1}行附近）")
+            if i == len(body_lines) - 1 and line.strip() == "":
+                continue
+            if line.strip() == "":
+                issues.append(f"小说正文不得出现完全空行（第{i + 1}行附近）")
                 break
 
     # 8. 段落长度
@@ -334,11 +366,19 @@ def _check_reference_protection() -> int:
     import subprocess
     try:
         result = subprocess.run(
-            ["git", "ls-files", "--error-unmatch", str(ref_dir) + "/"],
+            ["git", "ls-files", "--", "vault/References"],
             capture_output=True, text=True, cwd=VAULT_DIR.parent,
         )
-        if result.returncode == 0 and result.stdout.strip():
-            console.print("[red]✗[/red] 参考库文件被 Git 追踪！")
+        tracked = [
+            line.strip().replace("\\", "/")
+            for line in result.stdout.splitlines()
+            if line.strip()
+        ]
+        leaked = [path for path in tracked if path != "vault/References/README.md"]
+        if leaked:
+            console.print("[red]✗[/red] 参考库原文文件被 Git 追踪！")
+            for path in leaked:
+                console.print(f"    [red]✗[/red] {path}")
             issues += 1
     except Exception:
         pass

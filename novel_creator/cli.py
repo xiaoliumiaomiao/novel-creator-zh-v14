@@ -98,6 +98,43 @@ def _cmd_git_sync() -> int:
     return git_sync()
 
 
+def _cmd_genre_template(genre: str | None = None) -> int:
+    """生成题材模板."""
+    from novel_creator.corpus import generate_all_genre_templates, generate_genre_template
+
+    if genre:
+        # 检测 track
+        from novel_creator.genre_presets import FEMALE_GENRE_PRESETS, MALE_GENRE_PRESETS
+        if genre in MALE_GENRE_PRESETS:
+            return generate_genre_template(genre, "male")
+        elif genre in FEMALE_GENRE_PRESETS:
+            return generate_genre_template(genre, "female")
+        else:
+            console.print(f"[red]未知题材: {genre}[/red]")
+            return 1
+    else:
+        return generate_all_genre_templates()
+
+
+def _cmd_genre_list(track: str = "male") -> int:
+    """列出所有已知题材."""
+    from novel_creator.genre_presets import get_genre_preset, list_genres
+
+    for t in ["male", "female"] if track == "all" else [track]:
+        genres = list_genres(t)
+        label = "男频" if t == "male" else "女频"
+        console.print(f"\n[bold cyan]{label}题材:[/bold cyan]")
+        for genre in genres:
+            preset = get_genre_preset(genre, t)
+            if preset:
+                console.print(
+                    f"  [green]•[/green] {genre} "
+                    f"([dim]{preset['target_readers']}[/dim])"
+                )
+
+    return 0
+
+
 def _cmd_trace(project: str | None = None) -> int:
     """查看 Agent Trace 列表和内容."""
     from novel_creator.orchestration import list_traces
@@ -138,6 +175,8 @@ novelctl — 中文网文工业化创作工具集 CLI
     publish-check       发布前总闸门检查
     git-sync            安全 Git 同步
     trace               查看 Agent Trace
+    genre-template      生成题材模板（可指定题材名）
+    genre-list          列出所有题材
 
 全局选项:
     --help              显示此帮助信息
@@ -189,6 +228,8 @@ def main() -> int:
         "publish-check": lambda: _cmd_publish_check(),
         "git-sync": lambda: _cmd_git_sync(),
         "trace": lambda: _cmd_trace(cmd_args[0] if cmd_args else None),
+        "genre-template": lambda: _cmd_genre_template(cmd_args[0] if cmd_args else None),
+        "genre-list": lambda: _cmd_genre_list(cmd_args[0] if cmd_args else "male"),
     }
 
     if command not in commands:

@@ -192,8 +192,121 @@ def extract_patterns() -> int:
             continue
 
     console.print(f"  [green]✓[/green] 分析了 {len(patterns['章节功能'])} 个文件")
-    console.print("[dim]注意：仅提炼统计特征，不保存原文内容[/dim]")
 
+    # 提炼结构模式
+    if patterns["章节功能"]:
+        _derive_structure_patterns(patterns)
+
+    console.print("[dim]注意：仅提炼统计特征，不保存原文内容[/dim]")
+    return 0
+
+
+def _derive_structure_patterns(patterns: dict) -> None:
+    """从统计数据中提炼结构模式."""
+    chapter_data = patterns["章节功能"]
+    if not chapter_data:
+        return
+
+    word_counts = [d["word_count"] for d in chapter_data]
+    para_counts = [d["para_count"] for d in chapter_data]
+
+    avg_words = sum(word_counts) / len(word_counts)
+    avg_paras = sum(para_counts) / len(para_counts)
+
+    console.print("\n[bold]结构模式提炼:[/bold]")
+    console.print(f"  平均有效字数: {avg_words:.0f}")
+    console.print(f"  平均段落数: {avg_paras:.0f}")
+    console.print(f"  字数范围: {min(word_counts)}-{max(word_counts)}")
+
+
+def generate_genre_template(genre: str, track: str = "male") -> int:
+    """生成题材模板文件.
+
+    Args:
+        genre: 题材名称.
+        track: male 或 female.
+
+    Returns:
+        0 成功, 1 失败.
+    """
+    from novel_creator.genre_presets import get_genre_preset, list_genres
+
+    valid_genres = list_genres(track)
+    if genre not in valid_genres:
+        console.print(f"[red]未知题材: {genre}[/red]")
+        console.print(f"可用题材 ({track}): {', '.join(valid_genres)}")
+        return 1
+
+    preset = get_genre_preset(genre, track)
+    if not preset:
+        return 1
+
+    templates_dir = VAULT_DIR / "Templates"
+    templates_dir.mkdir(parents=True, exist_ok=True)
+
+    template_content = f"""---
+type: genre-template
+genre: {genre}
+track: {track}
+---
+
+# {genre} 题材模板
+
+## 目标读者
+
+{preset['target_readers']}
+
+## 章节参数
+
+- 建议字数范围: {preset['chapter_length'][0]}-{preset['chapter_length'][1]}
+
+## 核心钩子类型
+
+{chr(10).join(f'- {h}' for h in preset['hook_types'])}
+
+## 开局模型
+
+{preset['opening_model']}
+
+## 禁写内容
+
+{chr(10).join(f'- {f}' for f in preset['forbidden'])}
+
+## 平台口味
+
+{preset['platform_taste']}
+
+---
+
+*此模板为强参考，非硬套路。创作时可根据实际需要调整。*
+"""
+
+    filename = f"{'男频' if track == 'male' else '女频'}-{genre}题材模板.md"
+    filepath = templates_dir / filename
+    filepath.write_text(template_content, encoding="utf-8")
+
+    console.print(f"  [green]✓[/green] 生成题材模板: {filepath}")
+    return 0
+
+
+def generate_all_genre_templates() -> int:
+    """生成全部 16 个题材模板（8 男频 + 8 女频）.
+
+    Returns:
+        0 成功, 1 失败.
+    """
+    from novel_creator.genre_presets import FEMALE_GENRE_PRESETS, MALE_GENRE_PRESETS
+
+    console.print("[bold cyan]生成全部题材模板...[/bold cyan]")
+
+    for genre in MALE_GENRE_PRESETS:
+        generate_genre_template(genre, "male")
+
+    for genre in FEMALE_GENRE_PRESETS:
+        generate_genre_template(genre, "female")
+
+    console.print("\n[bold green]题材模板生成完成！[/bold green]")
+    console.print(f"  共 16 个模板 → [bold]{VAULT_DIR / 'Templates'}[/bold]")
     return 0
 
 

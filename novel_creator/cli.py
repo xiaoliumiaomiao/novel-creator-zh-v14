@@ -98,6 +98,28 @@ def _cmd_git_sync() -> int:
     return git_sync()
 
 
+def _cmd_trace(project: str | None = None) -> int:
+    """查看 Agent Trace 列表和内容."""
+    from novel_creator.orchestration import list_traces
+
+    traces = list_traces(project)
+    if not traces:
+        console.print("[yellow]未找到 Agent Trace[/yellow]")
+        return 0
+
+    console.print(f"[bold cyan]找到 {len(traces)} 条 Agent Trace:[/bold cyan]\n")
+    for t in traces[:20]:
+        size = t.stat().st_size
+        console.print(f"  [green]•[/green] {t.name} ([dim]{size} bytes[/dim])")
+        # 显示摘要
+        content = t.read_text(encoding="utf-8")[:200]
+        summary = content.split("\n")[5] if len(content.split("\n")) > 5 else ""
+        if summary:
+            console.print(f"    [dim]{summary[:80]}...[/dim]")
+
+    return 0
+
+
 HELP_TEXT = """
 novelctl — 中文网文工业化创作工具集 CLI
 
@@ -115,6 +137,7 @@ novelctl — 中文网文工业化创作工具集 CLI
     dashboard           生成 Markdown + HTML 仪表盘
     publish-check       发布前总闸门检查
     git-sync            安全 Git 同步
+    trace               查看 Agent Trace
 
 全局选项:
     --help              显示此帮助信息
@@ -165,6 +188,7 @@ def main() -> int:
         "dashboard": lambda: _cmd_dashboard(),
         "publish-check": lambda: _cmd_publish_check(),
         "git-sync": lambda: _cmd_git_sync(),
+        "trace": lambda: _cmd_trace(cmd_args[0] if cmd_args else None),
     }
 
     if command not in commands:

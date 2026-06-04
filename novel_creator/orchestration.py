@@ -236,3 +236,134 @@ def director_resolve(
 def create_trace(project: str, chapter_no: int, chapter_title: str) -> AgentTrace:
     """创建新的 Agent Trace 实例."""
     return AgentTrace(project, chapter_no, chapter_title)
+
+
+# ---- 编排合同验证 ----
+
+# 不可违反的合同条款
+CONTRACT_TERMS = {
+    "multi_agent": "不得单 Agent 完整生成章节",
+    "director_required": "不得跳过 Director",
+    "commercial_review_required": "不得跳过 Commercial Reviewer",
+    "continuity_audit_required": "不得跳过 Continuity Auditor",
+    "deai_required": "不得跳过 Anti-AI Voice Editor",
+    "librarian_required": "不得跳过 Obsidian Librarian",
+    "trace_required": "不得跳过 Agent Trace",
+    "memory_update_required": "必须完成记忆更新",
+    "user_approval_required": "进入 approved 前必须用户确认",
+}
+
+
+def validate_orchestration_contract(
+    agents_called: list[str],
+    trace_generated: bool = False,
+    memory_updated: bool = False,
+    user_approved: bool = False,
+) -> dict[str, bool]:
+    """验证编排合同遵守情况.
+
+    Args:
+        agents_called: 被调用的 Agent 名称列表.
+        trace_generated: Agent Trace 是否已生成.
+        memory_updated: 记忆是否已更新.
+        user_approved: 用户是否已确认.
+
+    Returns:
+        合同条款遵守情况字典，{条款: 是否通过}.
+    """
+    called_lower = {a.lower() for a in agents_called}
+    results: dict[str, bool] = {}
+
+    # 多 Agent 检查
+    results["multi_agent"] = len(agents_called) >= 3
+
+    # 必须 Agent 检查
+    results["director_required"] = any(
+        "director" in a for a in called_lower
+    )
+    results["commercial_review_required"] = any(
+        "commercial" in a and "review" in a for a in called_lower
+    )
+    results["continuity_audit_required"] = any(
+        "continuity" in a for a in called_lower
+    )
+    results["deai_required"] = any(
+        "deai" in a or "anti-ai" in a for a in called_lower
+    )
+    results["librarian_required"] = any(
+        "librarian" in a for a in called_lower
+    )
+
+    # Trace 和记忆更新
+    results["trace_required"] = trace_generated
+    results["memory_update_required"] = memory_updated
+    results["user_approval_required"] = user_approved
+
+    return results
+
+
+def check_contract_compliance(
+    contract_results: dict[str, bool],
+) -> tuple[bool, list[str]]:
+    """检查合同合规状态.
+
+    Args:
+        contract_results: validate_orchestration_contract 的返回值.
+
+    Returns:
+        (全部通过, 违规条款列表).
+    """
+    violations = []
+    for term, passed in contract_results.items():
+        if not passed:
+            violations.append(CONTRACT_TERMS.get(term, term))
+    return len(violations) == 0, violations
+
+
+def list_traces(project: str | None = None) -> list[Path]:
+    """列出所有 Agent Trace.
+
+    Args:
+        project: 可选，过滤项目名.
+
+    Returns:
+        Trace 文件路径列表（按时间倒序）.
+    """
+    trace_dir = VAULT_DIR / "00_Dashboard" / "Agent_Traces"
+    if not trace_dir.exists():
+        return []
+
+    traces = sorted(trace_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+
+    if project:
+        traces = [t for t in traces if project in t.name]
+
+    return traces
+
+
+def format_contract_report(contract_results: dict[str, bool]) -> str:
+    """格式化合同验证报告.
+
+    Args:
+        contract_results: validate_orchestration_contract 的返回值.
+
+    Returns:
+        格式化的报告文本.
+    """
+    lines = ["## 编排合同验证报告", ""]
+    all_pass = True
+
+    for term, passed in contract_results.items():
+        label = CONTRACT_TERMS.get(term, term)
+        status = "✓ 通过" if passed else "✗ 违规"
+        lines.append(f"- [{status}] {label}")
+        if not passed:
+            all_pass = False
+
+    lines.append("")
+    if all_pass:
+        lines.append("**结果: 全部通过**")
+    else:
+        lines.append("**结果: 存在违规项，章节不得进入 approved 状态**")
+
+    return "\n".join(lines)

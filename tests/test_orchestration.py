@@ -3,9 +3,13 @@
 from novel_creator.orchestration import (
     DECISION_PRIORITY,
     MINIMUM_AGENT_CHAIN,
+    check_contract_compliance,
     create_trace,
     director_resolve,
+    format_contract_report,
+    list_traces,
     validate_agent_chain,
+    validate_orchestration_contract,
 )
 
 
@@ -190,3 +194,120 @@ class TestDecisionPriority:
         assert "Anti-AI Voice Editor" in MINIMUM_AGENT_CHAIN
         assert "Polisher" in MINIMUM_AGENT_CHAIN
         assert "Obsidian Librarian" in MINIMUM_AGENT_CHAIN
+
+
+class TestOrchestrationContract:
+    """编排合同验证测试."""
+
+    def test_full_chain_compliant(self):
+        """完整 Agent 链应该通过合同验证."""
+        results = validate_orchestration_contract(
+            MINIMUM_AGENT_CHAIN,
+            trace_generated=True,
+            memory_updated=True,
+            user_approved=True,
+        )
+        assert results["multi_agent"] is True
+        assert results["director_required"] is True
+        assert results["commercial_review_required"] is True
+        assert results["trace_required"] is True
+
+    def test_single_agent_violation(self):
+        """单 Agent 应违反多 Agent 条款."""
+        results = validate_orchestration_contract(["Director"])
+        assert results["multi_agent"] is False
+
+    def test_missing_required_agents(self):
+        """缺少必须 Agent 应被检测."""
+        results = validate_orchestration_contract(
+            ["Director", "Drafter"],  # 缺少 Commercial Reviewer 等
+        )
+        assert results["commercial_review_required"] is False
+        assert results["continuity_audit_required"] is False
+
+    def test_missing_trace(self):
+        """缺少 Agent Trace 应被检测."""
+        results = validate_orchestration_contract(
+            MINIMUM_AGENT_CHAIN,
+            trace_generated=False,
+        )
+        assert results["trace_required"] is False
+
+    def test_missing_memory_update(self):
+        """缺少记忆更新应被检测."""
+        results = validate_orchestration_contract(
+            MINIMUM_AGENT_CHAIN,
+            memory_updated=False,
+        )
+        assert results["memory_update_required"] is False
+
+    def test_check_violations(self):
+        """check_contract_compliance 应返回违规列表."""
+        results = validate_orchestration_contract(
+            ["Director"],  # 明显违规
+            trace_generated=False,
+            memory_updated=False,
+            user_approved=False,
+        )
+        passed, violations = check_contract_compliance(results)
+        assert passed is False
+        assert len(violations) > 0
+        assert "不得单 Agent 完整生成章节" in violations
+
+    def test_check_all_compliant(self):
+        """全合规应返回无违规."""
+        results = validate_orchestration_contract(
+            MINIMUM_AGENT_CHAIN,
+            trace_generated=True,
+            memory_updated=True,
+            user_approved=True,
+        )
+        passed, violations = check_contract_compliance(results)
+        assert passed is True
+        assert len(violations) == 0
+
+    def test_format_contract_report(self):
+        """合同报告格式化."""
+        results = validate_orchestration_contract(
+            MINIMUM_AGENT_CHAIN,
+            trace_generated=True,
+            memory_updated=True,
+            user_approved=True,
+        )
+        report = format_contract_report(results)
+        assert "编排合同验证报告" in report
+        assert "全部通过" in report
+
+    def test_format_violation_report(self):
+        """违规报告应显示违规项."""
+        results = validate_orchestration_contract(
+            ["Director"],
+            trace_generated=False,
+        )
+        report = format_contract_report(results)
+        assert "违规" in report
+        assert "不得单 Agent 完整生成章节" in report
+
+
+class TestTraceListing:
+    """Trace 列出测试."""
+
+    def test_list_traces_empty(self):
+        """空 Trace 目录."""
+        traces = list_traces()
+        # Trace 目录可能存在也可能不存在，测试函数不崩溃即可
+        assert isinstance(traces, list)
+
+    def test_list_traces_with_trace(self):
+        """有 Trace 时列出."""
+        trace = create_trace("unittest-contract", 1, "测试合同")
+        trace.record_agent("Director", "input", "output", accepted=True)
+        trace.save()
+
+        traces = list_traces("unittest-contract")
+        assert len(traces) >= 1
+        assert any("unittest-contract" in t.name for t in traces)
+
+        # 清理
+        for t in traces:
+            t.unlink()

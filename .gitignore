@@ -11,4 +11,3 @@ reports/*.tmp
 vault/.obsidian/workspace*
 vault/.trash/
 vault/References/**
-!vault/References/README.md

@@ -29,6 +29,22 @@ novelctl init-vault
 # 用 Obsidian 打开 vault/ 目录作为知识中枢
 ```
 
+## IMA Skills 配置
+
+项目已安装 `.claude/skills/ima-skill/`，用于连接 ima 知识库和笔记 OpenAPI。
+
+使用前需要在本机配置凭证，凭证不要提交 Git：
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.config\ima"
+Set-Content "$env:USERPROFILE\.config\ima\client_id" "你的 Client ID"
+Set-Content "$env:USERPROFILE\.config\ima\api_key" "你的 API Key"
+```
+
+也可以使用环境变量：`IMA_CLIENT_ID` / `IMA_API_KEY`，或兼容变量 `IMA_OPENAPI_CLIENTID` / `IMA_OPENAPI_APIKEY`。
+
+凭证配置完成后，可通过 ima skill 搜索知识库、上传资料，再将导出的 Markdown 或结构笔记放入 `vault/References/ima-inbox/`，运行 `novelctl import-ima --source vault/References` 提炼结构模式。
+
 ## Obsidian 插件建议
 
 ### 核心插件（内置）

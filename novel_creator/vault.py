@@ -158,18 +158,21 @@ def init_vault() -> int:
 
     # 创建 References README
     ref_readme = VAULT_DIR / "References" / "README.md"
-    ref_readme.write_text(
-        "# References\n\n"
-        "参考库 — IMA 和网络参考导入区。\n\n"
-        "**此目录内容默认不提交 Git。**\n\n"
-        "## 使用规则\n\n"
-        "- 只允许学习结构模式（开局、冲突密度、钩子类型、情绪曲线、爽点分布、节奏）\n"
-        "- 禁止保存可复用原文\n"
-        "- 禁止将参考原文写入 Agent 提示词\n"
-        "- 禁止摘录长段正文\n",
-        encoding="utf-8",
-    )
-    console.print("  [green]✓[/green] 创建 References README")
+    if not ref_readme.exists():
+        ref_readme.write_text(
+            "# References\n\n"
+            "参考库 — IMA 和网络参考导入区。\n\n"
+            "**此目录内容默认不提交 Git。**\n\n"
+            "## 使用规则\n\n"
+            "- 只允许学习结构模式（开局、冲突密度、钩子类型、情绪曲线、爽点分布、节奏）\n"
+            "- 禁止保存可复用原文\n"
+            "- 禁止将参考原文写入 Agent 提示词\n"
+            "- 禁止摘录长段正文\n",
+            encoding="utf-8",
+        )
+        console.print("  [green]✓[/green] 创建 References README")
+    else:
+        console.print("  [green]✓[/green] References README 已存在，跳过覆盖")
 
     # 创建模板
     templates_dir = VAULT_DIR / "Templates"
@@ -192,11 +195,14 @@ def init_vault() -> int:
 
     dashboard_dir = VAULT_DIR / "00_Dashboard"
     dashboard_md = dashboard_dir / "Dashboard.md"
-    dashboard_md.write_text(
-        DASHBOARD_TEMPLATE.format(date=date.today().isoformat()),
-        encoding="utf-8",
-    )
-    console.print("  [green]✓[/green] 创建仪表盘")
+    if not dashboard_md.exists():
+        dashboard_md.write_text(
+            DASHBOARD_TEMPLATE.format(date=date.today().isoformat()),
+            encoding="utf-8",
+        )
+        console.print("  [green]✓[/green] 创建仪表盘")
+    else:
+        console.print("  [green]✓[/green] 仪表盘已存在，跳过覆盖")
 
     # 创建迷你样例
     _create_samples()

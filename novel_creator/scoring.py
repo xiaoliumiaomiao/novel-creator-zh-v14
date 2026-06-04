@@ -88,7 +88,7 @@ def score_chapter(file_path: Path) -> int:
     table.add_row("连续性", f"{continuity:.0f}", "")
     table.add_row("去AI味", f"{deai:.0f}", "")
     table.add_row("风险状态", risk, "")
-    table.add_row("段落问题", str(para_issues), "")
+    table.add_row("段落问题", str(len(para_issues)), "")
     table.add_row("空行问题", str(len(empty_lines)), "")
     table.add_row("综合评分", f"[bold]{overall:.0f}[/bold]", "")
 

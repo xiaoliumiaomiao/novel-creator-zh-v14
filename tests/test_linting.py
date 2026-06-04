@@ -95,7 +95,59 @@ class TestStyleBlacklist:
 
     def test_banned_pattern_detected(self):
         """测试 "A——不是B" 模式被检测到."""
-        # 直接验证 linting 逻辑中的正则
         from novel_creator.linting import BANNED_PATTERNS
         pattern = BANNED_PATTERNS[0][0]
         assert pattern.search("他抖了一下——不是冷，是灵石在动。")
+
+
+class TestWikilinks:
+    """Obsidian 双链扫描测试."""
+
+    def test_scan_basic_wikilink(self):
+        from novel_creator.linting import _scan_wikilinks
+        links = _scan_wikilinks("参考 [[人物卡]] 和 [[世界观]]")
+        assert "人物卡" in links
+        assert "世界观" in links
+
+    def test_scan_aliased_wikilink(self):
+        from novel_creator.linting import _scan_wikilinks
+        links = _scan_wikilinks("参见 [[人物卡|主角介绍]]")
+        assert "人物卡" in links
+
+    def test_scan_heading_wikilink(self):
+        from novel_creator.linting import _scan_wikilinks
+        links = _scan_wikilinks("详见 [[世界观#等级系统]]")
+        assert "世界观" in links
+
+    def test_scan_deduplication(self):
+        from novel_creator.linting import _scan_wikilinks
+        links = _scan_wikilinks("[[人物卡]] 和 [[人物卡]]")
+        assert len(links) == 1
+
+    def test_scan_no_links(self):
+        from novel_creator.linting import _scan_wikilinks
+        links = _scan_wikilinks("普通文本没有链接")
+        assert len(links) == 0
+
+    def test_validate_existing_link(self):
+        """测试验证存在的双链."""
+        from pathlib import Path
+
+        from novel_creator.linting import _validate_wikilinks
+        # 章节模板 是 vault 中实际存在的 .md 文件
+        broken = _validate_wikilinks(
+            ["章节模板"],
+            Path("dummy.md"),
+        )
+        assert len(broken) == 0
+
+    def test_validate_nonexistent_link(self):
+        """测试验证不存在的双链."""
+        from pathlib import Path
+
+        from novel_creator.linting import _validate_wikilinks
+        broken = _validate_wikilinks(
+            ["不存在的页面xyz123"],
+            Path("dummy.md"),
+        )
+        assert "不存在的页面xyz123" in broken

@@ -200,6 +200,13 @@ def _check_file(file_path: Path) -> list[str]:
         # 检查是否有未配对的英文引号
         issues.append("发现英文双引号，应使用中文引号「""」")
 
+    # 12. Obsidian 双链扫描
+    wikilinks = _scan_wikilinks(content)
+    if wikilinks:
+        broken = _validate_wikilinks(wikilinks, file_path)
+        for link in broken:
+            issues.append(f"Obsidian 双链目标不存在: [[{link}]]")
+
     return issues
 
 
@@ -250,3 +257,55 @@ def _count_effective_chars(text: str) -> int:
         if '一' <= char <= '鿿' or '㐀' <= char <= '䶿' or char.isdigit():
             count += 1
     return count
+
+
+# Obsidian wikilink 正则: [[target]], [[target|alias]], [[target#heading]]
+_WIKILINK_RE = re.compile(r'\[\[([^\]|#]+)(?:[|#][^\]]+)?\]\]')
+
+
+def _scan_wikilinks(content: str) -> list[str]:
+    """扫描内容中的所有 Obsidian 双链目标.
+
+    Args:
+        content: Markdown 内容.
+
+    Returns:
+        去重后的目标页面名列表.
+    """
+    targets = _WIKILINK_RE.findall(content)
+    # 去重并去除首尾空白
+    seen: set[str] = set()
+    result: list[str] = []
+    for t in targets:
+        t = t.strip()
+        if t and t not in seen:
+            seen.add(t)
+            result.append(t)
+    return result
+
+
+def _validate_wikilinks(targets: list[str], source_file: Path) -> list[str]:
+    """验证双链目标是否存在.
+
+    在 vault 中搜索对应的 .md 文件。
+
+    Args:
+        targets: 双链目标页面名列表.
+        source_file: 源文件路径.
+
+    Returns:
+        无法解析的链接列表.
+    """
+    from novel_creator.config import VAULT_DIR
+
+    broken: list[str] = []
+    for target in targets:
+        found = False
+        # 在 vault 中搜索匹配的 .md 文件
+        for md_file in VAULT_DIR.rglob("*.md"):
+            if md_file.stem == target and md_file != source_file:
+                found = True
+                break
+        if not found:
+            broken.append(target)
+    return broken
